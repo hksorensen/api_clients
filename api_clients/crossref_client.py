@@ -152,13 +152,16 @@ class CrossrefSearchClient(BaseAPIClient):
         next_cursor = message.get('next-cursor')
         
         if next_cursor:
-            # Add cursor to current URL
-            separator = '&' if '?' in current_url else '?'
             # Remove old cursor if present
             if 'cursor=' in current_url:
-                parts = current_url.split('&')
-                current_url = '&'.join(p for p in parts if not p.startswith('cursor='))
+                # Split URL into base and params properly
+                base, params = current_url.split('?', 1)
+                # Remove cursor param
+                param_parts = params.split('&')
+                param_parts = [p for p in param_parts if not p.startswith('cursor=')]
+                current_url = f"{base}?{'&'.join(param_parts)}"
             
+            # Add new cursor
             return f"{current_url}&cursor={next_cursor}"
         
         return None
