@@ -39,6 +39,8 @@ from .base_client import (
 from .crossref_client import (
     CrossrefSearchClient,
     CrossrefSearchFetcher,
+    CrossrefBibliographicClient,
+    CrossrefBibliographicFetcher,
     CrossrefConfig,
 )
 
@@ -60,6 +62,7 @@ from .local_cache import (
 __all__ = [
     # User-facing classes (in order of ease of use)
     "CrossrefSearchFetcher",       # Primary - easiest, no API key
+    "CrossrefBibliographicFetcher", # Citation resolution with caching
     "ScopusSearchFetcher",
     "ScopusAbstractFetcher",
     
@@ -67,6 +70,7 @@ __all__ = [
     "BaseAPIClient",
     "BaseSearchFetcher",
     "CrossrefSearchClient",
+    "CrossrefBibliographicClient",
     "ScopusSearchClient",
     
     # Configuration
