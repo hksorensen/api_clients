@@ -239,6 +239,11 @@ class BaseAPIClient(ABC):
         Yields:
             Dict containing page data (format defined by _parse_page_response)
         """
+        # Determine how many rows are requested (for checking if we should enforce limit)
+        requested_rows = None
+        if params:
+            requested_rows = params.get('rows') or params.get('count')
+        
         url = self._build_search_url(query, params)
         page = 0
         
@@ -267,8 +272,12 @@ class BaseAPIClient(ABC):
                 break
             
             # Check if query exceeds max results
+            # Skip this check if we're only requesting a small number of rows (e.g., <= 10)
+            # This is useful for citation resolution where we only need the top result
             total_results = page_data.get('total_results', 0)
-            if total_results > self.config.max_results_per_query:
+            should_check_limit = requested_rows is None or requested_rows > 10
+            
+            if should_check_limit and total_results > self.config.max_results_per_query:
                 logger.warning(
                     f"Query returned {total_results} results, exceeding max_results_per_query "
                     f"({self.config.max_results_per_query}). Consider refining your query."
@@ -290,13 +299,16 @@ class BaseAPIClient(ABC):
             # Get next page URL
             url = self._get_next_page_url(data, url)
     
-    def search(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def search(self, query: str, params: Optional[Dict[str, Any]] = None, ignore_total_limit: bool = False) -> List[Dict[str, Any]]:
         """
         Execute a search query and return all results.
         
         Args:
             query: Search query string
             params: Optional parameters to override defaults
+            ignore_total_limit: If True, don't raise error for too many total results.
+                               Useful when you only need a few top results (e.g., citation resolution).
+                               Default: False
         
         Returns:
             List of all result entries
@@ -306,10 +318,21 @@ class BaseAPIClient(ABC):
         
         for page_data in self.search_iter(query, params):
             if page_data.get('error') == 'too_many_results':
-                raise ValueError(
-                    f"Query returned {page_data['total_results']} results, "
-                    f"exceeding limit of {self.config.max_results_per_query}"
-                )
+                if ignore_total_limit:
+                    # Just log a warning but continue with the results we have
+                    logger.warning(
+                        f"Query returned {page_data['total_results']} total results, "
+                        f"but ignoring limit since ignore_total_limit=True"
+                    )
+                    # Still yield the page data if it has results
+                    if page_data.get('results'):
+                        all_results.extend(page_data['results'])
+                    break
+                else:
+                    raise ValueError(
+                        f"Query returned {page_data['total_results']} results, "
+                        f"exceeding limit of {self.config.max_results_per_query}"
+                    )
             
             if total_results is None:
                 total_results = page_data['total_results']
