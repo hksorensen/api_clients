@@ -455,6 +455,96 @@ class CrossrefSearchFetcher(BaseSearchFetcher):
         return super().fetch(query, force_refresh=force_refresh, **params)
 
 
+    def expand(
+        self,
+        results: pd.DataFrame,
+        clean_title: bool = True,
+        clean_authors: bool = True,
+        extract_year: bool = True,
+        extract_citations: bool = True
+    ) -> pd.DataFrame:
+        """
+        Expand Crossref results with automatic data cleaning.
+        
+        Args:
+            results: DataFrame from fetch()
+            clean_title: Extract title from list format (default: True)
+            clean_authors: Format author names as readable strings (default: True)
+            extract_year: Add publication_year column (default: True)
+            extract_citations: Add citation_count column (default: True)
+            
+        Returns:
+            Cleaned DataFrame with one row per paper
+            
+        Example:
+            >>> results = crossref.fetch("machine learning")
+            >>> papers = crossref.expand(results, clean_title=True, extract_year=True)
+            >>> papers[['DOI', 'title', 'publication_year', 'author_names']].head()
+        """
+        # Call base implementation
+        df = super().expand(results)
+        
+        if df.empty:
+            return df
+        
+        # Clean title (Crossref returns as list)
+        if clean_title and 'title' in df.columns:
+            df['title'] = df['title'].apply(
+                lambda x: x[0] if isinstance(x, list) and len(x) > 0 else None
+            )
+        
+        # Format authors
+        if clean_authors and 'author' in df.columns:
+            df['author_names'] = df['author'].apply(self._format_author_names)
+            df['first_author'] = df['author'].apply(self._get_first_author)
+        
+        # Extract publication year
+        if extract_year and 'published-print' in df.columns:
+            df['publication_year'] = df['published-print'].apply(
+                lambda x: x.get('date-parts', [[None]])[0][0] 
+                if isinstance(x, dict) and 'date-parts' in x 
+                else None
+            )
+        
+        # Extract citation count
+        if extract_citations and 'is-referenced-by-count' in df.columns:
+            df['citation_count'] = df['is-referenced-by-count']
+        
+        return df
+
+    @staticmethod
+    def _format_author_names(authors):
+        """Format author list to readable names."""
+        if not authors or not isinstance(authors, list):
+            return []
+        
+        names = []
+        for author in authors:
+            given = author.get('given', '')
+            family = author.get('family', '')
+            if given and family:
+                names.append(f"{given} {family}")
+            elif family:
+                names.append(family)
+        
+        return names
+
+    @staticmethod
+    def _get_first_author(authors):
+        """Get first author name."""
+        if not authors or not isinstance(authors, list) or len(authors) == 0:
+            return None
+        
+        first = authors[0]
+        given = first.get('given', '')
+        family = first.get('family', '')
+        
+        if given and family:
+            return f"{given} {family}"
+        elif family:
+            return family
+        return None
+
 # Convenience functions for common Crossref queries
 
 def search_by_title(title: str, mailto: str, **kwargs) -> Optional[pd.DataFrame]:

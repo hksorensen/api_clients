@@ -516,3 +516,59 @@ class BaseSearchFetcher:
     def clear_cache(self):
         """Clear all cached data."""
         self.cache.clear_all()
+
+    def expand(self, results: pd.DataFrame) -> pd.DataFrame:
+        """
+        Expand paged results into single DataFrame of items.
+        
+        Takes a DataFrame returned by fetch() (with 'data' column containing
+        lists of items per page) and returns a DataFrame with one row per item.
+        
+        Args:
+            results: DataFrame from fetch() with columns ['ID', 'page', 'num_hits', 'data', 'error']
+            
+        Returns:
+            DataFrame with one row per item from all pages
+            
+        Example:
+            >>> results = fetcher.fetch("machine learning")
+            >>> results.shape
+            (10, 5)  # 10 pages
+            >>> 
+            >>> items = fetcher.expand(results)
+            >>> items.shape
+            (1000, 50)  # 1000 items with ~50 columns
+            >>> 
+            >>> # Access individual items
+            >>> print(items['DOI'].tolist())
+            >>> print(items[['title', 'author']].head())
+            
+        Note:
+            - Automatically filters out None and empty data
+            - Preserves order from pagination
+            - Returns empty DataFrame if no items found
+            - Works with any API (Crossref, Scopus, etc.)
+        """
+        all_items = []
+        
+        # Extract all items from all pages
+        for idx, row in results.iterrows():
+            data = row.get('data')
+            
+            # Skip if no data or empty
+            if data is None:
+                continue
+            
+            if isinstance(data, list):
+                if len(data) > 0:
+                    all_items.extend(data)
+            else:
+                # Single item (edge case)
+                all_items.append(data)
+        
+        # Return empty DataFrame if no items
+        if not all_items:
+            return pd.DataFrame()
+        
+        # Convert to DataFrame
+        return pd.DataFrame(all_items)
