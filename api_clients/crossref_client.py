@@ -105,6 +105,11 @@ class CrossrefSearchClient(BaseAPIClient):
         if self.config.mailto and 'mailto' not in url_params:
             url_params['mailto'] = self.config.mailto
         
+        # Add cursor=* for initial request to enable cursor-based pagination
+        # The API requires cursor=* in the initial request to return next-cursor
+        if 'cursor' not in url_params:
+            url_params['cursor'] = '*'
+        
         # Build URL
         param_str = urlencode(url_params)
         return f"{self.config.base_url}?{param_str}"
@@ -150,6 +155,10 @@ class CrossrefSearchClient(BaseAPIClient):
         
         message = response_data['message']
         next_cursor = message.get('next-cursor')
+        items = message.get('items', [])
+        
+        if not items or len(items) == 0:
+            return None
         
         if next_cursor:
             # Remove old cursor if present
