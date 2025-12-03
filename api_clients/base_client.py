@@ -277,6 +277,14 @@ class BaseAPIClient(ABC):
                 yield page_data
                 break
             
+            # Stop iterating if there are no items/results on this page
+            items = page_data.get('results')
+            if items is None:
+                items = page_data.get('items')
+            if isinstance(items, list) and len(items) == 0:
+                logger.info(f"No items on page {page}; stopping pagination.")
+                break
+            
             yield page_data
             
             # Get next page URL
