@@ -180,6 +180,16 @@ class BaseAPIClient(ABC):
             response = self.session.get(url, timeout=self.config.timeout)
             self.rate_limiter.update_from_headers(response.headers)
             
+            # Log response details for debugging
+            if not response.ok:
+                logger.debug(f"Request failed: {response.status_code} - URL: {url[:100]}")
+                if response.headers.get('Content-Type', '').startswith('application/json'):
+                    try:
+                        error_data = response.json()
+                        logger.debug(f"Error response: {error_data}")
+                    except:
+                        pass
+            
             if response.ok:
                 return response
             
@@ -192,6 +202,21 @@ class BaseAPIClient(ABC):
             elif response.status_code == 500:  # Server Error
                 logger.warning(f"Server error (500). Retry {retry_count + 1}/{self.config.max_retries}")
                 return self._retry_request(url, retry_count)
+            
+            elif response.status_code == 503:  # Service Unavailable
+                logger.warning(f"Service unavailable (503). Retry {retry_count + 1}/{self.config.max_retries}")
+                # Use longer delay for 503 errors (service might be temporarily overloaded)
+                delay = min(
+                    self.config.initial_retry_delay * (self.config.retry_backoff_factor ** retry_count) * 2,
+                    self.config.max_retry_delay * 2
+                )
+                if retry_count < self.config.max_retries:
+                    logger.info(f"Waiting {delay:.1f}s before retry...")
+                    time.sleep(delay)
+                    return self._make_request(url, retry_count + 1)
+                else:
+                    logger.error(f"Max retries ({self.config.max_retries}) reached for 503 error")
+                    return None
             
             elif response.status_code == 400:  # Bad Request
                 logger.error(f"Bad request (400): {response.text[:200]}")

@@ -70,10 +70,16 @@ class ScopusSearchClient(BaseAPIClient):
     
     def _setup_session(self):
         """Setup Scopus session with API key."""
+        if not self.config.api_key:
+            raise ValueError(
+                "Scopus API key is required. Set it in the config or load from scopus.yaml file. "
+                "Get your API key from: https://dev.elsevier.com/"
+            )
         self.session.headers.update({
             'Accept': 'application/json',
             'X-ELS-APIKey': self.config.api_key,
         })
+        print (self.session.headers)
     
     def _build_search_url(self, query: str, params: Optional[Dict[str, Any]] = None) -> str:
         """Build Scopus search URL."""
